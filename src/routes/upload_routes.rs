@@ -51,18 +51,71 @@ pub async fn upload_image(
         return Err(AppError::BadRequest("Uploaded file is empty".to_string()));
     }
 
-    // Limit image size to 15MB
+    // 1. Limit image size to 15MB (Denial of Service protection)
     if bytes.len() > 15 * 1024 * 1024 {
         return Err(AppError::BadRequest(
             "File size exceeds maximum allowed limit (15MB)".to_string(),
         ));
     }
 
+    // 2. Strict Magic Byte / File Signature Validation (prevents polyglot & XSS uploads)
+    let is_jpeg = bytes.len() >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF;
+    let is_png = bytes.len() >= 8 && &bytes[0..8] == b"\x89PNG\r\n\x1a\n";
+    let is_gif = bytes.len() >= 6 && (&bytes[0..6] == b"GIF87a" || &bytes[0..6] == b"GIF89a");
+    let is_webp = bytes.len() >= 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP";
+    let is_avif = bytes.len() >= 12 && &bytes[4..8] == b"ftyp" && (&bytes[8..12] == b"avif" || &bytes[8..12] == b"avis");
+
+    if !is_jpeg && !is_png && !is_gif && !is_webp && !is_avif {
+        return Err(AppError::BadRequest(
+            "Security check failed: File header does not match a valid image format. Only JPEG, PNG, WebP, GIF, and AVIF image formats are allowed (SVG and executable formats are prohibited)."
+                .to_string(),
+        ));
+    }
+
+    // 3. Path Traversal & Filename Sanitization
+    let base_name = std::path::Path::new(&file_name)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("upload.jpg");
+
+    let sanitized_name: String = base_name
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '.' || *c == '-' || *c == '_')
+        .collect();
+
+    let safe_file_name = if sanitized_name.is_empty() {
+        "upload.jpg".to_string()
+    } else {
+        sanitized_name
+    };
+
+    // 4. File extension check against whitelist
+    let ext = safe_file_name
+        .rsplit('.')
+        .next()
+        .map(|e| e.to_lowercase())
+        .unwrap_or_default();
+
+    let allowed_extensions = ["jpg", "jpeg", "png", "webp", "gif", "avif"];
+    if !allowed_extensions.contains(&ext.as_str()) {
+        return Err(AppError::BadRequest(
+            "Disallowed file extension. Permitted extensions: jpg, jpeg, png, webp, gif, avif"
+                .to_string(),
+        ));
+    }
+
+    // 5. Sanitize target folder
+    let sanitized_folder = folder.map(|f| {
+        f.chars()
+            .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+            .collect::<String>()
+    });
+
     let response = CloudinaryService::upload_image(
         &config,
         bytes,
-        &file_name,
-        folder.as_deref(),
+        &safe_file_name,
+        sanitized_folder.as_deref(),
     )
     .await?;
 

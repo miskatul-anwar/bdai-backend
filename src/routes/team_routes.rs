@@ -42,6 +42,24 @@ pub async fn get_team_member(
     Ok(Json(member))
 }
 
+fn validate_safe_url(url_str: &str, field_name: &str) -> Result<(), AppError> {
+    let trimmed = url_str.trim();
+    if trimmed.is_empty() {
+        return Ok(());
+    }
+    if !trimmed.starts_with("https://") && !trimmed.starts_with("http://") {
+        return Err(AppError::BadRequest(format!(
+            "Security violation: {field_name} must begin with 'https://' or 'http://' (untrusted URI schemes prohibited)."
+        )));
+    }
+    if trimmed.len() > 1000 {
+        return Err(AppError::BadRequest(format!(
+            "{field_name} cannot exceed 1000 characters."
+        )));
+    }
+    Ok(())
+}
+
 /// POST /api/team - Add Employee (STRICTLY Admin Only: Only Admin can add all kinds of employees)
 pub async fn create_team_member(
     State(pool): State<PgPool>,
@@ -55,6 +73,22 @@ pub async fn create_team_member(
         return Err(AppError::BadRequest(
             "Employee name and designation are required".to_string(),
         ));
+    }
+
+    if name.len() > 150 {
+        return Err(AppError::BadRequest("Employee name cannot exceed 150 characters".to_string()));
+    }
+
+    if designation.len() > 150 {
+        return Err(AppError::BadRequest("Designation cannot exceed 150 characters".to_string()));
+    }
+
+    if let Some(ref s_url) = payload.scholar_url {
+        validate_safe_url(s_url, "Google Scholar URL")?;
+    }
+
+    if let Some(ref l_url) = payload.linkedin_url {
+        validate_safe_url(l_url, "LinkedIn URL")?;
     }
 
     let institution = payload
@@ -112,6 +146,23 @@ pub async fn update_team_member(
     .fetch_optional(&pool)
     .await?
     .ok_or_else(|| AppError::NotFound("Team member not found".to_string()))?;
+
+    if let Some(ref s_url) = payload.scholar_url {
+        validate_safe_url(s_url, "Google Scholar URL")?;
+    }
+    if let Some(ref l_url) = payload.linkedin_url {
+        validate_safe_url(l_url, "LinkedIn URL")?;
+    }
+    if let Some(ref n) = payload.name {
+        if n.len() > 150 {
+            return Err(AppError::BadRequest("Employee name cannot exceed 150 characters".to_string()));
+        }
+    }
+    if let Some(ref d) = payload.designation {
+        if d.len() > 150 {
+            return Err(AppError::BadRequest("Designation cannot exceed 150 characters".to_string()));
+        }
+    }
 
     let name = payload.name.unwrap_or(existing.name);
     let designation = payload.designation.unwrap_or(existing.designation);

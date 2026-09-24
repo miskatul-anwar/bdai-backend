@@ -4,7 +4,7 @@ use axum::{
 };
 use chrono::Utc;
 use serde::Deserialize;
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
 use crate::error::AppError;
@@ -18,32 +18,38 @@ pub struct NewsQuery {
     pub featured: Option<bool>,
 }
 
-/// GET /api/news - List news articles (Public)
+/// GET /api/news - List news articles (Public, Parameterized against SQLi)
 pub async fn list_news(
     State(pool): State<PgPool>,
     Query(query): Query<NewsQuery>,
 ) -> Result<Json<Vec<NewsArticle>>, AppError> {
-    let mut sql = "SELECT id, title, slug, excerpt, content, category, publish_date, author, status, featured, tags, created_at, updated_at FROM public.news_articles WHERE 1=1".to_string();
+    let mut builder: QueryBuilder<Postgres> = QueryBuilder::new(
+        "SELECT id, title, slug, excerpt, content, category, publish_date, author, status, featured, tags, created_at, updated_at FROM public.news_articles WHERE 1=1"
+    );
 
     if let Some(ref cat) = query.category {
         if cat != "all" {
-            sql.push_str(&format!(" AND category = '{}'", cat.replace('\'', "''")));
+            builder.push(" AND category = ");
+            builder.push_bind(cat);
         }
     }
 
     if let Some(ref stat) = query.status {
         if stat != "all" {
-            sql.push_str(&format!(" AND status = '{}'", stat.replace('\'', "''")));
+            builder.push(" AND status = ");
+            builder.push_bind(stat);
         }
     }
 
     if let Some(feat) = query.featured {
-        sql.push_str(&format!(" AND featured = {}", feat));
+        builder.push(" AND featured = ");
+        builder.push_bind(feat);
     }
 
-    sql.push_str(" ORDER BY publish_date DESC, created_at DESC");
+    builder.push(" ORDER BY publish_date DESC, created_at DESC");
 
-    let articles = sqlx::query_as::<_, NewsArticle>(&sql)
+    let articles = builder
+        .build_query_as::<NewsArticle>()
         .fetch_all(&pool)
         .await?;
 

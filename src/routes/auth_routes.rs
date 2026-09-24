@@ -22,22 +22,37 @@ pub async fn login(
 ) -> Result<Json<AuthResponse>, AppError> {
     let email = payload.email.trim().to_lowercase();
 
-    let user = sqlx::query_as::<_, User>(
+    // Dummy bcrypt hash (cost 12) used to equalize response latency
+    // and completely eliminate username enumeration through timing analysis.
+    const DUMMY_HASH: &str = "$2b$12$e8uqgXhWd6FqIqD8iI2V9e2g3Hk7FzJ7P7L1X9p8r7t6y5w4u3v2q";
+
+    let user_opt = sqlx::query_as::<_, User>(
         "SELECT id, name, email, password_hash, role, avatar, department, status, created_at, updated_at
          FROM public.users
          WHERE LOWER(email) = $1",
     )
     .bind(&email)
     .fetch_optional(&pool)
-    .await?
-    .ok_or_else(|| AppError::Unauthorized("Invalid email or password".to_string()))?;
+    .await?;
+
+    let (user, is_valid_password) = match user_opt {
+        Some(u) => {
+            let valid = verify_password(&payload.password, &u.password_hash);
+            (Some(u), valid)
+        }
+        None => {
+            let _ = verify_password(&payload.password, DUMMY_HASH);
+            (None, false)
+        }
+    };
+
+    let user = match user {
+        Some(u) if is_valid_password => u,
+        _ => return Err(AppError::Unauthorized("Invalid email or password".to_string())),
+    };
 
     if user.status != "active" {
         return Err(AppError::Forbidden("Account is inactive".to_string()));
-    }
-
-    if !verify_password(&payload.password, &user.password_hash) {
-        return Err(AppError::Unauthorized("Invalid email or password".to_string()));
     }
 
     let token = create_token(&user, &config.jwt_secret, config.jwt_expiration_hours)?;

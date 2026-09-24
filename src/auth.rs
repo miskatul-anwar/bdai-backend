@@ -62,10 +62,13 @@ pub fn create_token(user: &User, secret: &str, expiration_hours: i64) -> Result<
 }
 
 pub fn verify_token(token: &str, secret: &str) -> Result<Claims, AppError> {
+    let mut validation = Validation::new(jsonwebtoken::Algorithm::HS256);
+    validation.validate_exp = true;
+
     let token_data = decode::<Claims>(
         token,
         &DecodingKey::from_secret(secret.as_bytes()),
-        &Validation::default(),
+        &validation,
     )
     .map_err(|e| AppError::Unauthorized(format!("Invalid or expired token: {e}")))?;
 

@@ -3,7 +3,7 @@ use axum::{
     Json,
 };
 use serde::Deserialize;
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
 use crate::error::AppError;
@@ -16,28 +16,34 @@ pub struct VacancyQuery {
     pub status: Option<String>,
 }
 
-/// GET /api/vacancies - List all vacancies / tenders / notices (Public)
+/// GET /api/vacancies - List all vacancies / tenders / notices (Public, Parameterized against SQLi)
 pub async fn list_vacancies(
     State(pool): State<PgPool>,
     Query(query): Query<VacancyQuery>,
 ) -> Result<Json<Vec<Vacancy>>, AppError> {
-    let mut sql = "SELECT id, title, department, work_package, notice_type, location, deadline, status, description, requirements, applicant_count, created_at, updated_at FROM public.vacancies WHERE 1=1".to_string();
+    let mut builder: QueryBuilder<Postgres> = QueryBuilder::new(
+        "SELECT id, title, department, work_package, notice_type, location, deadline, status, description, requirements, applicant_count, created_at, updated_at FROM public.vacancies WHERE 1=1"
+    );
 
     if let Some(ref t) = query.notice_type {
         if t != "all" && t != "All" {
-            sql.push_str(&format!(" AND LOWER(notice_type) = LOWER('{}')", t.replace('\'', "''")));
+            builder.push(" AND LOWER(notice_type) = LOWER(");
+            builder.push_bind(t);
+            builder.push(")");
         }
     }
 
     if let Some(ref stat) = query.status {
         if stat != "all" {
-            sql.push_str(&format!(" AND status = '{}'", stat.replace('\'', "''")));
+            builder.push(" AND status = ");
+            builder.push_bind(stat);
         }
     }
 
-    sql.push_str(" ORDER BY deadline ASC, created_at DESC");
+    builder.push(" ORDER BY deadline ASC, created_at DESC");
 
-    let vacancies = sqlx::query_as::<_, Vacancy>(&sql)
+    let vacancies = builder
+        .build_query_as::<Vacancy>()
         .fetch_all(&pool)
         .await?;
 

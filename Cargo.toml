@@ -7,7 +7,7 @@ edition = "2024"
 axum = { version = "0.8", features = ["multipart"] }
 tokio = { version = "1.43", features = ["full"] }
 tower = { version = "0.5", features = ["util"] }
-tower-http = { version = "0.6", features = ["cors", "trace"] }
+tower-http = { version = "0.6", features = ["cors", "trace", "timeout", "set-header"] }
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres", "chrono", "uuid", "macros"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls"] }
 sha1 = "0.10"

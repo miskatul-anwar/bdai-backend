@@ -27,6 +27,52 @@ pub async fn list_users(
     Ok(Json(response))
 }
 
+fn validate_email(email: &str) -> Result<(), AppError> {
+    if email.len() < 5 || email.len() > 254 {
+        return Err(AppError::BadRequest(
+            "Email must be between 5 and 254 characters".to_string(),
+        ));
+    }
+    if !email.contains('@') || !email.contains('.') {
+        return Err(AppError::BadRequest("Invalid email format".to_string()));
+    }
+    if email.contains(char::is_whitespace) || email.contains('\0') {
+        return Err(AppError::BadRequest(
+            "Email contains invalid characters".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_password(password: &str) -> Result<(), AppError> {
+    if password.len() < 8 {
+        return Err(AppError::BadRequest(
+            "Password must be at least 8 characters long".to_string(),
+        ));
+    }
+    if password.len() > 128 {
+        return Err(AppError::BadRequest(
+            "Password cannot exceed 128 characters".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_name(name: &str) -> Result<(), AppError> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() || trimmed.len() > 150 {
+        return Err(AppError::BadRequest(
+            "Name must be between 1 and 150 characters".to_string(),
+        ));
+    }
+    if name.contains('\0') {
+        return Err(AppError::BadRequest(
+            "Name contains invalid characters".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 /// POST /api/users - Create User (STRICTLY Admin Only: Only Admin can add Admin, Moderator, Member)
 pub async fn create_user(
     State(pool): State<PgPool>,
@@ -41,11 +87,11 @@ pub async fn create_user(
     let email = payload.email.trim().to_lowercase();
     let name = payload.name.trim();
 
-    if name.is_empty() || email.is_empty() {
-        return Err(AppError::BadRequest("Name and email are required".to_string()));
-    }
+    validate_email(&email)?;
+    validate_name(name)?;
 
-    let raw_password = payload.password.unwrap_or_else(|| "admin123".to_string());
+    let raw_password = payload.password.unwrap_or_else(|| "Admin@123456".to_string());
+    validate_password(&raw_password)?;
     let password_hash = hash_password(&raw_password)?;
 
     let avatar = payload.avatar.unwrap_or_else(|| "/team/miskat.jpg".to_string());
@@ -109,11 +155,22 @@ pub async fn update_user(
     .await?
     .ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
 
-    let name = payload.name.unwrap_or(existing.name);
-    let email = payload
-        .email
-        .map(|e| e.trim().to_lowercase())
-        .unwrap_or(existing.email);
+    let name = match payload.name {
+        Some(n) => {
+            validate_name(&n)?;
+            n
+        }
+        None => existing.name,
+    };
+
+    let email = match payload.email {
+        Some(e) => {
+            let em = e.trim().to_lowercase();
+            validate_email(&em)?;
+            em
+        }
+        None => existing.email,
+    };
 
     let role = if let Some(r) = payload.role {
         UserRole::from_str(&r)
@@ -128,6 +185,7 @@ pub async fn update_user(
 
     let password_hash = if let Some(pwd) = payload.password {
         if !pwd.trim().is_empty() {
+            validate_password(&pwd)?;
             hash_password(&pwd)?
         } else {
             existing.password_hash

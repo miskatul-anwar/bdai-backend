@@ -58,21 +58,45 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config: config.clone(),
     };
 
-    // 4. Configure CORS
-    let cors = CorsLayer::new()
-        .allow_origin(Any) // Allows frontend on :3000, admin panel on :3001, and production
-        .allow_methods([
-            axum::http::Method::GET,
-            axum::http::Method::POST,
-            axum::http::Method::PUT,
-            axum::http::Method::DELETE,
-            axum::http::Method::OPTIONS,
-        ])
-        .allow_headers([
-            axum::http::header::AUTHORIZATION,
-            axum::http::header::CONTENT_TYPE,
-            axum::http::header::ACCEPT,
-        ]);
+    // 4. Configure Hardened CORS
+    let cors = if config.cors_origins.is_empty() || config.cors_origins.contains(&"*".to_string()) {
+        CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods([
+                axum::http::Method::GET,
+                axum::http::Method::POST,
+                axum::http::Method::PUT,
+                axum::http::Method::DELETE,
+                axum::http::Method::OPTIONS,
+            ])
+            .allow_headers([
+                axum::http::header::AUTHORIZATION,
+                axum::http::header::CONTENT_TYPE,
+                axum::http::header::ACCEPT,
+            ])
+    } else {
+        let allowed_origins: Vec<axum::http::HeaderValue> = config
+            .cors_origins
+            .iter()
+            .filter_map(|o| o.parse().ok())
+            .collect();
+
+        CorsLayer::new()
+            .allow_origin(allowed_origins)
+            .allow_methods([
+                axum::http::Method::GET,
+                axum::http::Method::POST,
+                axum::http::Method::PUT,
+                axum::http::Method::DELETE,
+                axum::http::Method::OPTIONS,
+            ])
+            .allow_headers([
+                axum::http::header::AUTHORIZATION,
+                axum::http::header::CONTENT_TYPE,
+                axum::http::header::ACCEPT,
+            ])
+            .allow_credentials(true)
+    };
 
     // 5. Configure Rate Limiting (Token Bucket per Client IP via SmartIpKeyExtractor)
     let governor_conf = std::sync::Arc::new(
@@ -93,9 +117,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    // 6. Build Axum router
+    // 6. Build Axum router with Comprehensive Security Hardening
+    // - Security Headers (X-Content-Type-Options, X-Frame-Options, CSP, HSTS, etc.)
+    // - DefaultBodyLimit (15MB max to mitigate memory exhaustion DoS)
+    // - TimeoutLayer (30s limit to defeat Slowloris attacks)
+    // - Rate Limiting via token-bucket
+    // - CORS controls
     let app = routes::create_router()
+        .layer(axum::middleware::from_fn(security_headers_middleware))
         .layer(GovernorLayer::new(governor_conf))
+        .layer(axum::extract::DefaultBodyLimit::max(15 * 1024 * 1024))
+        .layer(tower_http::timeout::TimeoutLayer::with_status_code(
+            axum::http::StatusCode::REQUEST_TIMEOUT,
+            std::time::Duration::from_secs(30),
+        ))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state);
@@ -141,4 +176,62 @@ async fn shutdown_signal() {
         _ = ctrl_c => info!("Received Ctrl+C, initiating shutdown..."),
         _ = terminate => info!("Received SIGTERM, initiating shutdown..."),
     }
+}
+
+/// Injects industry-standard OWASP HTTP security headers into every API response
+async fn security_headers_middleware(
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let mut response = next.run(req).await;
+    let headers = response.headers_mut();
+
+    // 1. Prevent MIME-sniffing
+    headers.insert(
+        axum::http::header::X_CONTENT_TYPE_OPTIONS,
+        axum::http::HeaderValue::from_static("nosniff"),
+    );
+
+    // 2. Prevent Clickjacking
+    headers.insert(
+        axum::http::header::X_FRAME_OPTIONS,
+        axum::http::HeaderValue::from_static("DENY"),
+    );
+
+    // 3. XSS Filter (legacy defense)
+    headers.insert(
+        axum::http::HeaderName::from_static("x-xss-protection"),
+        axum::http::HeaderValue::from_static("1; mode=block"),
+    );
+
+    // 4. Referrer Policy
+    headers.insert(
+        axum::http::header::REFERRER_POLICY,
+        axum::http::HeaderValue::from_static("strict-origin-when-cross-origin"),
+    );
+
+    // 5. Permissions Policy
+    headers.insert(
+        axum::http::HeaderName::from_static("permissions-policy"),
+        axum::http::HeaderValue::from_static(
+            "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+        ),
+    );
+
+    // 6. Content Security Policy for API
+    headers.insert(
+        axum::http::HeaderName::from_static("content-security-policy"),
+        axum::http::HeaderValue::from_static("default-src 'none'; frame-ancestors 'none'; sandbox"),
+    );
+
+    // 7. Strict-Transport-Security (HSTS) - 1 year
+    headers.insert(
+        axum::http::header::STRICT_TRANSPORT_SECURITY,
+        axum::http::HeaderValue::from_static("max-age=31536000; includeSubDomains; preload"),
+    );
+
+    // 8. Remove Server header to prevent fingerprinting
+    headers.remove(axum::http::header::SERVER);
+
+    response
 }
