@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: bdai-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    region: oregon
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        sync: false # Set to your Supabase PostgreSQL connection string with ?sslmode=require
+      - key: JWT_SECRET
+        generateValue: true # Render automatically generates a cryptographically secure secret
+      - key: JWT_EXPIRATION_HOURS
+        value: 72
+      - key: RATE_LIMIT_PER_SECOND
+        value: 10
+      - key: RATE_LIMIT_BURST
+        value: 50
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false # Your Cloudinary cloud name
+      - key: CLOUDINARY_API_KEY
+        sync: false # Your Cloudinary API key
+      - key: CLOUDINARY_API_SECRET
+        sync: false # Your Cloudinary API secret
+      - key: CLOUDINARY_UPLOAD_PRESET
+        sync: false # Cloudinary unsigned/signed preset (optional)
+      - key: CLOUDINARY_FOLDER
+        value: bdai
+      - key: GOOGLE_CLIENT_ID
+        sync: false # Your Google Cloud Console OAuth 2.0 Client ID
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false # Your Google Cloud Console OAuth 2.0 Client Secret
+      - key: FRONTEND_URL
+        value: "https://bdai.bike-csecu.com" # Or your deployed admin panel domain
+      - key: CORS_ORIGINS
+        value: "https://bdai.bike-csecu.com,http://localhost:3000,http://localhost:3001"
+
