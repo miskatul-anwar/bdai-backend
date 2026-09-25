@@ -6,6 +6,7 @@ pub mod team;
 pub mod user;
 pub mod vacancy;
 pub mod partner;
+pub mod tool;
 
 pub use activity::*;
 pub use news::*;
@@ -13,5 +14,6 @@ pub use objective::*;
 pub use partner::*;
 pub use settings::*;
 pub use team::*;
+pub use tool::*;
 pub use user::*;
 pub use vacancy::*;

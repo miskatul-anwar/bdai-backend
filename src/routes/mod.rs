@@ -8,6 +8,7 @@ pub mod settings_routes;
 pub mod team_routes;
 pub mod upload_routes;
 pub mod user_routes;
+pub mod tool_routes;
 pub mod vacancy_routes;
 
 use axum::{
@@ -106,5 +107,16 @@ pub fn create_api_router() -> Router<AppState> {
             get(partner_routes::get_partner)
                 .put(partner_routes::update_partner)
                 .delete(partner_routes::delete_partner),
+        )
+        // Showcase Tools & Software Platforms
+        .route(
+            "/api/tools",
+            get(tool_routes::list_tools).post(tool_routes::create_tool),
+        )
+        .route(
+            "/api/tools/{id}",
+            get(tool_routes::get_tool)
+                .put(tool_routes::update_tool)
+                .delete(tool_routes::delete_tool),
         )
 }
