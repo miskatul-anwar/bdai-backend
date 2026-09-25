@@ -186,7 +186,10 @@ pub async fn create_event(
     let mut events = get_events_from_db(&pool).await?;
 
     let now_str = chrono::Utc::now().to_rfc3339();
-    let new_id = format!("event_{}", Uuid::new_v4().simple());
+    let new_id = payload
+        .id
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| format!("event_{}", Uuid::new_v4().simple()));
     let next_order = payload.order.unwrap_or(events.len() as i32 + 1);
 
     let new_event = Event {
@@ -274,9 +277,10 @@ pub async fn delete_event(
 ) -> Result<StatusCode, AppError> {
     let mut events = get_events_from_db(&pool).await?;
 
+    let target_id = id.trim();
     let index = events
         .iter()
-        .position(|e| e.id == id)
+        .position(|e| e.id.trim() == target_id || e.id.trim().trim_start_matches("event_") == target_id.trim_start_matches("event_"))
         .ok_or_else(|| AppError::NotFound(format!("Event '{}' not found", id)))?;
 
     let removed = events.remove(index);

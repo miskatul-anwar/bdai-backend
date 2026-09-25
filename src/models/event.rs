@@ -40,6 +40,8 @@ fn default_category() -> String {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateEventRequest {
+    #[serde(default)]
+    pub id: Option<String>,
     pub title: String,
     pub date: String,
     #[serde(default = "default_status")]
