@@ -16,7 +16,7 @@ pub async fn list_users(
     _auth: CurrentUser,
 ) -> Result<Json<Vec<UserResponse>>, AppError> {
     let users = sqlx::query_as::<_, User>(
-        "SELECT id, name, email, password_hash, role, avatar, department, status, created_at, updated_at
+        "SELECT id, name, username, email, password_hash, role, avatar, department, status, created_at, updated_at
          FROM public.users
          ORDER BY created_at ASC",
     )
@@ -25,6 +25,21 @@ pub async fn list_users(
 
     let response = users.into_iter().map(UserResponse::from).collect();
     Ok(Json(response))
+}
+
+fn validate_username(username: &str) -> Result<(), AppError> {
+    let trimmed = username.trim();
+    if trimmed.len() < 2 || trimmed.len() > 50 {
+        return Err(AppError::BadRequest(
+            "Username must be between 2 and 50 characters".to_string(),
+        ));
+    }
+    if !trimmed.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.' || c == '-') {
+        return Err(AppError::BadRequest(
+            "Username can only contain alphanumeric characters, underscores, dots, and hyphens".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 fn validate_email(email: &str) -> Result<(), AppError> {
@@ -90,6 +105,14 @@ pub async fn create_user(
     validate_email(&email)?;
     validate_name(name)?;
 
+    let username = match payload.username {
+        Some(ref u) => {
+            validate_username(u)?;
+            Some(u.trim().to_lowercase())
+        }
+        None => email.split('@').next().map(|s| s.to_string()),
+    };
+
     let raw_password = payload.password.unwrap_or_else(|| "Admin@123456".to_string());
     validate_password(&raw_password)?;
     let password_hash = hash_password(&raw_password)?;
@@ -101,11 +124,12 @@ pub async fn create_user(
     let status = payload.status.unwrap_or_else(|| "active".to_string());
 
     let user = sqlx::query_as::<_, User>(
-        "INSERT INTO public.users (name, email, password_hash, role, avatar, department, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         RETURNING id, name, email, password_hash, role, avatar, department, status, created_at, updated_at",
+        "INSERT INTO public.users (name, username, email, password_hash, role, avatar, department, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id, name, username, email, password_hash, role, avatar, department, status, created_at, updated_at",
     )
     .bind(name)
+    .bind(&username)
     .bind(&email)
     .bind(&password_hash)
     .bind(role.as_str())
@@ -117,7 +141,7 @@ pub async fn create_user(
     .map_err(|e| {
         if let sqlx::Error::Database(ref db_err) = e {
             if db_err.is_unique_violation() {
-                return AppError::Conflict("A user with this email already exists".to_string());
+                return AppError::Conflict("A user with this username or email already exists".to_string());
             }
         }
         AppError::Database(e)
@@ -146,7 +170,7 @@ pub async fn update_user(
     Json(payload): Json<UpdateUserRequest>,
 ) -> Result<Json<UserResponse>, AppError> {
     let existing = sqlx::query_as::<_, User>(
-        "SELECT id, name, email, password_hash, role, avatar, department, status, created_at, updated_at
+        "SELECT id, name, username, email, password_hash, role, avatar, department, status, created_at, updated_at
          FROM public.users
          WHERE id = $1",
     )
@@ -161,6 +185,14 @@ pub async fn update_user(
             n
         }
         None => existing.name,
+    };
+
+    let username = match payload.username {
+        Some(ref u) => {
+            validate_username(u)?;
+            Some(u.trim().to_lowercase())
+        }
+        None => existing.username,
     };
 
     let email = match payload.email {
@@ -200,11 +232,12 @@ pub async fn update_user(
 
     let updated = sqlx::query_as::<_, User>(
         "UPDATE public.users
-         SET name = $1, email = $2, password_hash = $3, role = $4, avatar = $5, department = $6, status = $7, updated_at = now()
-         WHERE id = $8
-         RETURNING id, name, email, password_hash, role, avatar, department, status, created_at, updated_at",
+         SET name = $1, username = $2, email = $3, password_hash = $4, role = $5, avatar = $6, department = $7, status = $8, updated_at = now()
+         WHERE id = $9
+         RETURNING id, name, username, email, password_hash, role, avatar, department, status, created_at, updated_at",
     )
     .bind(&name)
+    .bind(&username)
     .bind(&email)
     .bind(&password_hash)
     .bind(&role)
@@ -243,7 +276,7 @@ pub async fn delete_user(
     }
 
     let user = sqlx::query_as::<_, User>(
-        "SELECT id, name, email, password_hash, role, avatar, department, status, created_at, updated_at
+        "SELECT id, name, username, email, password_hash, role, avatar, department, status, created_at, updated_at
          FROM public.users
          WHERE id = $1",
     )

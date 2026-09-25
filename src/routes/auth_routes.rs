@@ -20,18 +20,27 @@ pub async fn login(
     State(config): State<AppConfig>,
     Json(payload): Json<LoginRequest>,
 ) -> Result<Json<AuthResponse>, AppError> {
-    let email = payload.email.trim().to_lowercase();
+    let identifier = payload
+        .username
+        .as_deref()
+        .or(payload.email.as_deref())
+        .map(|s| s.trim().to_lowercase())
+        .unwrap_or_default();
+
+    if identifier.is_empty() {
+        return Err(AppError::BadRequest("Username or email is required".to_string()));
+    }
 
     // Dummy bcrypt hash (cost 12) used to equalize response latency
     // and completely eliminate username enumeration through timing analysis.
     const DUMMY_HASH: &str = "$2b$12$e8uqgXhWd6FqIqD8iI2V9e2g3Hk7FzJ7P7L1X9p8r7t6y5w4u3v2q";
 
     let user_opt = sqlx::query_as::<_, User>(
-        "SELECT id, name, email, password_hash, role, avatar, department, status, created_at, updated_at
+        "SELECT id, name, username, email, password_hash, role, avatar, department, status, created_at, updated_at
          FROM public.users
-         WHERE LOWER(email) = $1",
+         WHERE LOWER(username) = $1 OR LOWER(email) = $1",
     )
-    .bind(&email)
+    .bind(&identifier)
     .fetch_optional(&pool)
     .await?;
 
@@ -48,7 +57,7 @@ pub async fn login(
 
     let user = match user {
         Some(u) if is_valid_password => u,
-        _ => return Err(AppError::Unauthorized("Invalid email or password".to_string())),
+        _ => return Err(AppError::Unauthorized("Invalid username/email or password".to_string())),
     };
 
     if user.status != "active" {
@@ -62,9 +71,9 @@ pub async fn login(
         "INSERT INTO public.activity_logs (action, entity, target_name, user_name)
          VALUES ($1, $2, $3, $4)",
     )
-    .bind("Signed In (Email)")
+    .bind("Signed In (Credentials)")
     .bind("Session")
-    .bind(&user.email)
+    .bind(user.username.as_deref().unwrap_or(&user.email))
     .bind(&user.name)
     .execute(&pool)
     .await;
@@ -82,7 +91,7 @@ pub async fn me(
     let user_id = claims.user_uuid()?;
 
     let user = sqlx::query_as::<_, User>(
-        "SELECT id, name, email, password_hash, role, avatar, department, status, created_at, updated_at
+        "SELECT id, name, username, email, password_hash, role, avatar, department, status, created_at, updated_at
          FROM public.users
          WHERE id = $1",
     )
@@ -258,7 +267,7 @@ async fn process_google_user(
     // STRICT RBAC CHECK:
     // Only users whose email has previously been created/authorized by an Admin can sign in.
     let user = sqlx::query_as::<_, User>(
-        "SELECT id, name, email, password_hash, role, avatar, department, status, created_at, updated_at
+        "SELECT id, name, username, email, password_hash, role, avatar, department, status, created_at, updated_at
          FROM public.users
          WHERE LOWER(email) = $1",
     )

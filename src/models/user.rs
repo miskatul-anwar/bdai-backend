@@ -30,6 +30,7 @@ impl UserRole {
 pub struct User {
     pub id: Uuid,
     pub name: String,
+    pub username: Option<String>,
     pub email: String,
     #[serde(skip_serializing)]
     pub password_hash: String,
@@ -45,6 +46,7 @@ pub struct User {
 pub struct UserResponse {
     pub id: Uuid,
     pub name: String,
+    pub username: Option<String>,
     pub email: String,
     pub role: String,
     pub avatar: Option<String>,
@@ -58,6 +60,7 @@ impl From<User> for UserResponse {
         Self {
             id: u.id,
             name: u.name,
+            username: u.username,
             email: u.email,
             role: u.role,
             avatar: u.avatar,
@@ -71,6 +74,7 @@ impl From<User> for UserResponse {
 #[derive(Debug, Deserialize)]
 pub struct CreateUserRequest {
     pub name: String,
+    pub username: Option<String>,
     pub email: String,
     pub password: Option<String>,
     pub role: String, // Admin | Moderator
@@ -82,6 +86,7 @@ pub struct CreateUserRequest {
 #[derive(Debug, Deserialize)]
 pub struct UpdateUserRequest {
     pub name: Option<String>,
+    pub username: Option<String>,
     pub email: Option<String>,
     pub password: Option<String>,
     pub role: Option<String>,
@@ -92,7 +97,8 @@ pub struct UpdateUserRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct LoginRequest {
-    pub email: String,
+    pub email: Option<String>,
+    pub username: Option<String>,
     pub password: String,
 }
 
