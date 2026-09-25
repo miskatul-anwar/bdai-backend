@@ -6,13 +6,13 @@ use axum::{
 use sqlx::PgPool;
 use std::collections::HashMap;
 
-use crate::auth::{create_token, verify_password};
+use crate::auth::{create_auth_response, verify_password, verify_token};
 use crate::config::AppConfig;
 use crate::error::AppError;
 use crate::middleware::CurrentUser;
 use crate::models::{
     AuthResponse, GoogleAuthRequest, GoogleAuthUrlResponse, GoogleTokenInfo, LoginRequest, User,
-    UserResponse,
+    UserResponse, VerifyTokenRequest, VerifyTokenResponse,
 };
 
 pub async fn login(
@@ -64,7 +64,7 @@ pub async fn login(
         return Err(AppError::Forbidden("Account is inactive".to_string()));
     }
 
-    let token = create_token(&user, &config.jwt_secret, config.jwt_expiration_hours)?;
+    let auth_resp = create_auth_response(user, &config.jwt_secret, config.jwt_expiration_hours)?;
 
     // Log login activity
     let _ = sqlx::query(
@@ -73,15 +73,76 @@ pub async fn login(
     )
     .bind("Signed In (Credentials)")
     .bind("Session")
-    .bind(user.username.as_deref().unwrap_or(&user.email))
-    .bind(&user.name)
+    .bind(auth_resp.user.username.as_deref().unwrap_or(&auth_resp.user.email))
+    .bind(&auth_resp.user.name)
     .execute(&pool)
     .await;
 
-    Ok(Json(AuthResponse {
-        token,
-        user: UserResponse::from(user),
-    }))
+    Ok(Json(auth_resp))
+}
+
+/// POST /api/auth/refresh - Refresh JWT Access Token for an active user
+pub async fn refresh(
+    State(pool): State<PgPool>,
+    State(config): State<AppConfig>,
+    CurrentUser(claims): CurrentUser,
+) -> Result<Json<AuthResponse>, AppError> {
+    let user_id = claims.user_uuid()?;
+
+    let user = sqlx::query_as::<_, User>(
+        "SELECT id, name, username, email, password_hash, role, avatar, department, status, created_at, updated_at
+         FROM public.users
+         WHERE id = $1",
+    )
+    .bind(user_id)
+    .fetch_optional(&pool)
+    .await?
+    .ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
+
+    if user.status != "active" {
+        return Err(AppError::Forbidden("Account is inactive".to_string()));
+    }
+
+    let auth_resp = create_auth_response(user, &config.jwt_secret, config.jwt_expiration_hours)?;
+    Ok(Json(auth_resp))
+}
+
+/// POST /api/auth/verify - Verify a JWT access token and return token validity + decoded claims
+pub async fn verify(
+    State(config): State<AppConfig>,
+    headers: axum::http::HeaderMap,
+    Json(payload): Json<VerifyTokenRequest>,
+) -> Result<Json<VerifyTokenResponse>, AppError> {
+    let token = payload.token.or_else(|| {
+        headers
+            .get(axum::http::header::AUTHORIZATION)
+            .and_then(|val| val.to_str().ok())
+            .and_then(|h| h.strip_prefix("Bearer ").map(|s| s.to_string()))
+    });
+
+    let token = match token {
+        Some(t) if !t.trim().is_empty() => t.trim().to_string(),
+        _ => {
+            return Ok(Json(VerifyTokenResponse {
+                valid: false,
+                claims: None,
+                message: Some("No token provided in request body or Authorization header".to_string()),
+            }));
+        }
+    };
+
+    match verify_token(&token, &config.jwt_secret) {
+        Ok(claims) => Ok(Json(VerifyTokenResponse {
+            valid: true,
+            claims: Some(claims),
+            message: Some("Token is valid".to_string()),
+        })),
+        Err(e) => Ok(Json(VerifyTokenResponse {
+            valid: false,
+            claims: None,
+            message: Some(e.to_string()),
+        })),
+    }
 }
 
 pub async fn me(
@@ -302,7 +363,7 @@ async fn process_google_user(
         }
     }
 
-    let token = create_token(&user, &config.jwt_secret, config.jwt_expiration_hours)?;
+    let auth_resp = create_auth_response(user, &config.jwt_secret, config.jwt_expiration_hours)?;
 
     // Audit log
     let _ = sqlx::query(
@@ -311,15 +372,12 @@ async fn process_google_user(
     )
     .bind("Signed In (Google OAuth)")
     .bind("Session")
-    .bind(&user.email)
-    .bind(&user.name)
+    .bind(&auth_resp.user.email)
+    .bind(&auth_resp.user.name)
     .execute(pool)
     .await;
 
-    Ok(AuthResponse {
-        token,
-        user: UserResponse::from(user),
-    })
+    Ok(auth_resp)
 }
 
 /// POST /api/auth/google

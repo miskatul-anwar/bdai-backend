@@ -4,16 +4,24 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::error::AppError;
-use crate::models::User;
+use crate::models::{AuthResponse, User, UserResponse};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {
     pub sub: String, // User ID (UUID string)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub username: Option<String>,
     pub email: String,
     pub name: String,
     pub role: String, // Admin | Moderator
+    #[serde(default = "default_token_type")]
+    pub token_type: Option<String>, // "access"
     pub exp: usize,
     pub iat: usize,
+}
+
+fn default_token_type() -> Option<String> {
+    Some("access".to_string())
 }
 
 impl Claims {
@@ -34,16 +42,19 @@ impl Claims {
     }
 }
 
-pub fn create_token(user: &User, secret: &str, expiration_hours: i64) -> Result<String, AppError> {
+/// Create an explicit JWT Access Token with standard claims
+pub fn create_access_token(user: &User, secret: &str, expiration_hours: i64) -> Result<String, AppError> {
     let now = Utc::now();
     let exp = (now + Duration::hours(expiration_hours)).timestamp() as usize;
     let iat = now.timestamp() as usize;
 
     let claims = Claims {
         sub: user.id.to_string(),
+        username: user.username.clone(),
         email: user.email.clone(),
         name: user.name.clone(),
         role: user.role.clone(),
+        token_type: Some("access".to_string()),
         exp,
         iat,
     };
@@ -53,7 +64,27 @@ pub fn create_token(user: &User, secret: &str, expiration_hours: i64) -> Result<
         &claims,
         &EncodingKey::from_secret(secret.as_bytes()),
     )
-    .map_err(|e| AppError::Internal(format!("Failed to sign JWT token: {e}")))
+    .map_err(|e| AppError::Internal(format!("Failed to sign JWT access token: {e}")))
+}
+
+/// Helper that bundles access token, metadata, and user info into standard AuthResponse
+pub fn create_auth_response(user: User, secret: &str, expiration_hours: i64) -> Result<AuthResponse, AppError> {
+    let access_token = create_access_token(&user, secret, expiration_hours)?;
+    let expires_in = expiration_hours * 3600;
+
+    Ok(AuthResponse {
+        token: access_token.clone(),
+        access_token,
+        token_type: "Bearer".to_string(),
+        expires_in,
+        user: UserResponse::from(user),
+    })
+}
+
+/// Backwards-compatible alias for create_access_token
+#[allow(dead_code)]
+pub fn create_token(user: &User, secret: &str, expiration_hours: i64) -> Result<String, AppError> {
+    create_access_token(user, secret, expiration_hours)
 }
 
 pub fn verify_token(token: &str, secret: &str) -> Result<Claims, AppError> {
@@ -94,5 +125,34 @@ mod tests {
         let valid_hash = hash_password("admin123").unwrap();
         println!("VALID_HASH_FOR_ADMIN123: {}", valid_hash);
         assert!(verify_password("admin123", &valid_hash));
+    }
+
+    #[test]
+    fn test_jwt_access_token_creation_and_verification() {
+        let user = User {
+            id: Uuid::new_v4(),
+            name: "Miskat Hasan".to_string(),
+            username: Some("miskat".to_string()),
+            email: "miskat.cse@cu.ac.bd".to_string(),
+            password_hash: "hash".to_string(),
+            role: "Admin".to_string(),
+            avatar: None,
+            department: "CSE CU".to_string(),
+            status: "active".to_string(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+
+        let secret = "super_secret_test_key_for_jwt_validation";
+        let token = create_access_token(&user, secret, 24).expect("Token generation should succeed");
+        let claims = verify_token(&token, secret).expect("Token verification should succeed");
+
+        assert_eq!(claims.sub, user.id.to_string());
+        assert_eq!(claims.username.as_deref(), Some("miskat"));
+        assert_eq!(claims.email, "miskat.cse@cu.ac.bd");
+        assert_eq!(claims.role, "Admin");
+        assert_eq!(claims.token_type.as_deref(), Some("access"));
+        assert!(claims.is_admin());
+        assert!(claims.can_edit_content());
     }
 }

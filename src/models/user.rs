@@ -102,10 +102,25 @@ pub struct LoginRequest {
     pub password: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct AuthResponse {
     pub token: String,
+    pub access_token: String,
+    pub token_type: String, // "Bearer"
+    pub expires_in: i64,    // Lifetime in seconds
     pub user: UserResponse,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct VerifyTokenRequest {
+    pub token: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct VerifyTokenResponse {
+    pub valid: bool,
+    pub claims: Option<crate::auth::Claims>,
+    pub message: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

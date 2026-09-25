@@ -22,6 +22,8 @@ pub fn create_router() -> Router<AppState> {
         .route("/api/health", get(health_routes::health_check))
         // Authentication
         .route("/api/auth/login", post(auth_routes::login))
+        .route("/api/auth/refresh", post(auth_routes::refresh))
+        .route("/api/auth/verify", post(auth_routes::verify))
         .route("/api/auth/me", get(auth_routes::me))
         .route("/api/auth/google", post(auth_routes::google_auth))
         .route("/api/auth/google/url", get(auth_routes::google_auth_url))
