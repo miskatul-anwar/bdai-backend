@@ -154,7 +154,49 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("  Health API: http://localhost:{}/api/health", config.port);
     info!("  Rate Limit: {} req/s (burst: {}) per client IP", config.rate_limit_per_second, config.rate_limit_burst);
     info!("  Admin RBAC: Only Admin can Add/Remove Users & Employees   ");
+    if config.self_ping_enabled {
+        info!("  Keep-Alive: Active (pinging {} every {}s)", config.self_ping_url.as_deref().unwrap_or("none"), config.self_ping_interval_secs);
+    }
     info!("============================================================");
+
+    // 7. Spawn Keep-Alive Self-Ping Worker (Prevents Render Free Tier Inactivity Spin-Down)
+    if config.self_ping_enabled {
+        if let Some(target_url) = config.self_ping_url.clone() {
+            let interval_secs = config.self_ping_interval_secs;
+            tokio::spawn(async move {
+                // Wait 15 seconds after server boot before first ping
+                tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+                info!("Keep-Alive: Initialized self-ping service targeting '{target_url}' every {interval_secs}s");
+
+                let client = match reqwest::Client::builder()
+                    .timeout(std::time::Duration::from_secs(20))
+                    .build()
+                {
+                    Ok(c) => c,
+                    Err(e) => {
+                        error!("Keep-Alive: Failed to build HTTP client for self-ping: {e}");
+                        return;
+                    }
+                };
+
+                loop {
+                    match client.get(&target_url).send().await {
+                        Ok(res) => {
+                            info!(
+                                "Keep-Alive: Heartbeat self-ping status {} for {}",
+                                res.status(),
+                                target_url
+                            );
+                        }
+                        Err(err) => {
+                            tracing::warn!("Keep-Alive: Self-ping attempt error (will retry next interval): {err}");
+                        }
+                    }
+                    tokio::time::sleep(std::time::Duration::from_secs(interval_secs)).await;
+                }
+            });
+        }
+    }
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())

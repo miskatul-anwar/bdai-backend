@@ -1,0 +1,28 @@
+name: Render Free-Tier Keep-Alive
+
+on:
+  schedule:
+    # Triggered every 10 minutes to prevent Render free-tier from spinning down after 15 min
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  heartbeat:
+    name: Ping Backend Health Endpoint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Send Keep-Alive HTTP Request
+        run: |
+          echo "Sending keep-alive request to Render backend..."
+          RESPONSE=$(curl -s -S -w "\nHTTP_STATUS:%{http_code}\nTIME_TOTAL:%{time_total}s" \
+            --max-time 30 \
+            -H "User-Agent: GitHub-Actions-KeepAlive" \
+            "https://bdai-backend.onrender.com/api/health")
+          echo "$RESPONSE"
+          STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d: -f2)
+          if [ "$STATUS" = "200" ]; then
+            echo "Successfully pinged Render backend. Status: 200 OK"
+          else
+            echo "Warning: Response status was $STATUS"
+          fi

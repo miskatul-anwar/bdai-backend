@@ -20,6 +20,9 @@ pub struct AppConfig {
     pub frontend_url: String,
     pub rate_limit_per_second: u64,
     pub rate_limit_burst: u32,
+    pub self_ping_enabled: bool,
+    pub self_ping_url: Option<String>,
+    pub self_ping_interval_secs: u64,
 }
 
 impl AppConfig {
@@ -75,6 +78,19 @@ impl AppConfig {
             .and_then(|v| v.parse().ok())
             .unwrap_or(50);
 
+        let self_ping_enabled = env::var("SELF_PING_ENABLED")
+            .map(|v| v.to_lowercase() != "false" && v != "0")
+            .unwrap_or(true);
+
+        let self_ping_url = env::var("SELF_PING_URL")
+            .ok()
+            .or_else(|| Some("https://bdai-backend.onrender.com/api/health".to_string()));
+
+        let self_ping_interval_secs = env::var("SELF_PING_INTERVAL_SECS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(600);
+
         Self {
             database_url,
             supabase_url,
@@ -94,6 +110,9 @@ impl AppConfig {
             frontend_url,
             rate_limit_per_second,
             rate_limit_burst,
+            self_ping_enabled,
+            self_ping_url,
+            self_ping_interval_secs,
         }
     }
 }
