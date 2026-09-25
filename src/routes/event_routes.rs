@@ -22,6 +22,7 @@ fn get_seed_events() -> Vec<Event> {
             id: "event_workshop_debasish".to_string(),
             title: "Professor Dr. Debasish Ghose from Kristiania University College, Norway visited our lab for collaboration purpose. He delivers an intensive quality paper writing workshop.".to_string(),
             date: "29th July 2026".to_string(),
+            date_iso: Some("2026-07-29".to_string()),
             status: "held".to_string(),
             category: "Workshop".to_string(),
             location: Some("BDAI Lab & SPMT Office, Department of CSE, University of Chittagong".to_string()),
@@ -45,6 +46,7 @@ fn get_seed_events() -> Vec<Event> {
             id: "event_seminar_rag_bi".to_string(),
             title: "RAG-Driven Business Intelligence Platform Integration: Enterprise Data for Real-Time Insight, Predictive, and Prescriptive Decision Analytics".to_string(),
             date: "2.00PM · 19th May 2026".to_string(),
+            date_iso: Some("2026-05-19T14:00".to_string()),
             status: "held".to_string(),
             category: "Seminar".to_string(),
             location: Some("Department of Computer Science and Engineering, University of Chittagong".to_string()),
@@ -66,6 +68,7 @@ fn get_seed_events() -> Vec<Event> {
             id: "event_phd_cyberbullying".to_string(),
             title: "Identificatin of the Digital Footprints of Cyberbullying and the personality traits of the perpretators to protect the malicious activity".to_string(),
             date: "2.00PM · 14th May 2026".to_string(),
+            date_iso: Some("2026-05-14T14:00".to_string()),
             status: "held".to_string(),
             category: "PhD Seminar".to_string(),
             location: Some("Department of Computer Science and Engineering, University of Chittagong".to_string()),
@@ -86,6 +89,26 @@ fn get_seed_events() -> Vec<Event> {
     ]
 }
 
+fn get_event_timestamp(event: &Event) -> i64 {
+    if let Some(ref iso) = event.date_iso {
+        if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(iso) {
+            return dt.timestamp();
+        }
+        if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(iso, "%Y-%m-%dT%H:%M") {
+            return dt.and_utc().timestamp();
+        }
+        if let Ok(d) = chrono::NaiveDate::parse_from_str(iso, "%Y-%m-%d") {
+            return d.and_hms_opt(0, 0, 0).map(|dt| dt.and_utc().timestamp()).unwrap_or(0);
+        }
+    }
+    if let Some(ref cat) = event.created_at {
+        if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(cat) {
+            return dt.timestamp();
+        }
+    }
+    -(event.order as i64)
+}
+
 /// Helper to get current events list from public.site_settings
 async fn get_events_from_db(pool: &PgPool) -> Result<Vec<Event>, AppError> {
     let row = sqlx::query_as::<_, SiteSetting>(
@@ -100,7 +123,7 @@ async fn get_events_from_db(pool: &PgPool) -> Result<Vec<Event>, AppError> {
             if events.is_empty() {
                 events = get_seed_events();
             } else {
-                events.sort_by_key(|e| e.order);
+                events.sort_by(|a, b| get_event_timestamp(b).cmp(&get_event_timestamp(a)));
             }
             Ok(events)
         }
@@ -196,6 +219,7 @@ pub async fn create_event(
         id: new_id,
         title: payload.title.clone(),
         date: payload.date,
+        date_iso: payload.date_iso,
         status: payload.status,
         category: payload.category,
         location: payload.location,
@@ -208,7 +232,10 @@ pub async fn create_event(
     };
 
     events.push(new_event.clone());
-    events.sort_by_key(|e| e.order);
+    events.sort_by(|a, b| get_event_timestamp(b).cmp(&get_event_timestamp(a)));
+    for (idx, e) in events.iter_mut().enumerate() {
+        e.order = (idx + 1) as i32;
+    }
 
     save_events_to_db(&pool, &events, "Created", &payload.title, &claims.name).await?;
 
@@ -238,6 +265,9 @@ pub async fn update_event(
     if let Some(date) = payload.date {
         current.date = date;
     }
+    if let Some(date_iso) = payload.date_iso {
+        current.date_iso = Some(date_iso);
+    }
     if let Some(status) = payload.status {
         current.status = status;
     }
@@ -262,7 +292,10 @@ pub async fn update_event(
     current.updated_at = Some(now_str);
 
     let updated_event = current.clone();
-    events.sort_by_key(|e| e.order);
+    events.sort_by(|a, b| get_event_timestamp(b).cmp(&get_event_timestamp(a)));
+    for (idx, e) in events.iter_mut().enumerate() {
+        e.order = (idx + 1) as i32;
+    }
 
     save_events_to_db(&pool, &events, "Updated", &updated_event.title, &claims.name).await?;
 
@@ -284,6 +317,10 @@ pub async fn delete_event(
         .ok_or_else(|| AppError::NotFound(format!("Event '{}' not found", id)))?;
 
     let removed = events.remove(index);
+    events.sort_by(|a, b| get_event_timestamp(b).cmp(&get_event_timestamp(a)));
+    for (idx, e) in events.iter_mut().enumerate() {
+        e.order = (idx + 1) as i32;
+    }
 
     save_events_to_db(&pool, &events, "Deleted", &removed.title, &claims.name).await?;
 

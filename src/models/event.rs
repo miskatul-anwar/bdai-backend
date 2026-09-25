@@ -11,6 +11,8 @@ pub struct Event {
     pub id: String,
     pub title: String,
     pub date: String, // e.g. "29th July 2026", "2.00PM · 19th May 2026"
+    #[serde(default)]
+    pub date_iso: Option<String>, // e.g. "2026-07-29" or "2026-05-19T14:00"
     #[serde(default = "default_status")]
     pub status: String, // "held" | "upcoming"
     #[serde(default = "default_category")]
@@ -44,6 +46,8 @@ pub struct CreateEventRequest {
     pub id: Option<String>,
     pub title: String,
     pub date: String,
+    #[serde(default)]
+    pub date_iso: Option<String>,
     #[serde(default = "default_status")]
     pub status: String,
     #[serde(default = "default_category")]
@@ -63,6 +67,7 @@ pub struct CreateEventRequest {
 pub struct UpdateEventRequest {
     pub title: Option<String>,
     pub date: Option<String>,
+    pub date_iso: Option<String>,
     pub status: Option<String>,
     pub category: Option<String>,
     pub location: Option<String>,
