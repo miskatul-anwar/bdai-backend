@@ -11,6 +11,7 @@ pub mod user_routes;
 pub mod tool_routes;
 pub mod vacancy_routes;
 pub mod video_routes;
+pub mod event_routes;
 
 use axum::{
     routing::{get, post, put},
@@ -130,5 +131,16 @@ pub fn create_api_router() -> Router<AppState> {
             get(video_routes::get_video)
                 .put(video_routes::update_video)
                 .delete(video_routes::delete_video),
+        )
+        // Events (Held & Upcoming)
+        .route(
+            "/api/events",
+            get(event_routes::list_events).post(event_routes::create_event),
+        )
+        .route(
+            "/api/events/{id}",
+            get(event_routes::get_event)
+                .put(event_routes::update_event)
+                .delete(event_routes::delete_event),
         )
 }
