@@ -3,6 +3,7 @@ pub mod auth_routes;
 pub mod health_routes;
 pub mod news_routes;
 pub mod objective_routes;
+pub mod partner_routes;
 pub mod settings_routes;
 pub mod team_routes;
 pub mod upload_routes;
@@ -16,10 +17,12 @@ use axum::{
 
 use crate::state::AppState;
 
-pub fn create_router() -> Router<AppState> {
+pub fn create_health_router() -> Router<AppState> {
+    Router::new().route("/api/health", get(health_routes::health_check))
+}
+
+pub fn create_api_router() -> Router<AppState> {
     Router::new()
-        // Health
-        .route("/api/health", get(health_routes::health_check))
         // Authentication
         .route("/api/auth/login", post(auth_routes::login))
         .route("/api/auth/refresh", post(auth_routes::refresh))
@@ -92,5 +95,16 @@ pub fn create_router() -> Router<AppState> {
         .route(
             "/api/upload/signature",
             get(upload_routes::get_upload_signature),
+        )
+        // Consortium Partners & Collaborators
+        .route(
+            "/api/partners",
+            get(partner_routes::list_partners).post(partner_routes::create_partner),
+        )
+        .route(
+            "/api/partners/{id}",
+            get(partner_routes::get_partner)
+                .put(partner_routes::update_partner)
+                .delete(partner_routes::delete_partner),
         )
 }

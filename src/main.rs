@@ -127,14 +127,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // 6. Build Axum router with Comprehensive Security Hardening
-    // - Security Headers (X-Content-Type-Options, X-Frame-Options, CSP, HSTS, etc.)
-    // - DefaultBodyLimit (15MB max to mitigate memory exhaustion DoS)
-    // - TimeoutLayer (30s limit to defeat Slowloris attacks)
-    // - Rate Limiting via token-bucket
-    // - CORS controls
-    let app = routes::create_router()
+    // - Health router (bypasses rate limiting for Render/Uptime health monitors)
+    let health_router = routes::create_health_router();
+
+    // - API router (protected by token-bucket rate limiting)
+    let api_router = routes::create_api_router()
+        .layer(GovernorLayer::new(governor_conf));
+
+    let app = health_router
+        .merge(api_router)
         .layer(axum::middleware::from_fn(security_headers_middleware))
-        .layer(GovernorLayer::new(governor_conf))
         .layer(axum::extract::DefaultBodyLimit::max(15 * 1024 * 1024))
         .layer(tower_http::timeout::TimeoutLayer::with_status_code(
             axum::http::StatusCode::REQUEST_TIMEOUT,
