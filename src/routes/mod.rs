@@ -3,6 +3,7 @@ pub mod auth_routes;
 pub mod health_routes;
 pub mod news_routes;
 pub mod objective_routes;
+pub mod settings_routes;
 pub mod team_routes;
 pub mod upload_routes;
 pub mod user_routes;
@@ -77,6 +78,12 @@ pub fn create_router() -> Router<AppState> {
         )
         // Activity Logs
         .route("/api/activities", get(activity_routes::list_activities))
+        // Site Settings (Dynamic Portal Content)
+        .route("/api/settings", get(settings_routes::get_all_settings))
+        .route(
+            "/api/settings/{id}",
+            get(settings_routes::get_setting).put(settings_routes::update_setting),
+        )
         // Cloudinary Image Upload
         .route("/api/upload", post(upload_routes::upload_image))
         .route(

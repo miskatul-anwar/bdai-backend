@@ -84,3 +84,15 @@ pub fn verify_password(password: &str, hash: &str) -> bool {
         password == hash
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_admin_hash() {
+        let valid_hash = hash_password("admin123").unwrap();
+        println!("VALID_HASH_FOR_ADMIN123: {}", valid_hash);
+        assert!(verify_password("admin123", &valid_hash));
+    }
+}
