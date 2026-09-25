@@ -35,7 +35,7 @@ where
 }
 
 /// Extractor that enforces that the caller has role "Admin".
-/// Strictly guards: Only Admin can Add, Remove an Admin, Moderator, Member and all kinds of employees.
+/// Strictly guards: Only Admin can Add, Remove an Admin, Moderator and all kinds of employees.
 pub struct AdminOnly(pub Claims);
 
 impl<S> FromRequestParts<S> for AdminOnly
@@ -50,7 +50,7 @@ where
 
         if !claims.is_admin() {
             return Err(AppError::Forbidden(
-                "Access denied: Only Admins can Add or Remove an Admin, Moderator, Member, and all kinds of employees."
+                "Access denied: Only Admins can Add or Remove an Admin, Moderator, and all kinds of employees."
                     .to_string(),
             ));
         }

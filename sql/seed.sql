@@ -1,6 +1,6 @@
 -- Seed initial BDAI data matching the live application
 
--- 1. Insert Initial Users (Admin, Moderator, Member)
+-- 1. Insert Initial Users (Admin, Moderator)
 -- Password for all default accounts is: admin123
 -- Stored as bcrypt hash: $2a$12$1jR4mYp7c9kX8tW2qFzCReE6cWjT1vM0uO3bL7pQ8eN2sA4xZ9uCy
 INSERT INTO public.users (id, name, email, password_hash, role, avatar, department, status)
@@ -8,7 +8,7 @@ VALUES
     ('a0000000-0000-0000-0000-000000000001', 'Prof. Dr. Rudra Pratap Deb Nath', 'rudra@cu.ac.bd', '$2a$12$1jR4mYp7c9kX8tW2qFzCReE6cWjT1vM0uO3bL7pQ8eN2sA4xZ9uCy', 'Admin', '/team/rudra.jpg', 'Sub-Project Manager (SPM), Department of CSE, CU', 'active'),
     ('a0000000-0000-0000-0000-000000000002', 'Dr. Abu Nowshed Chy', 'nowshed@cu.ac.bd', '$2a$12$1jR4mYp7c9kX8tW2qFzCReE6cWjT1vM0uO3bL7pQ8eN2sA4xZ9uCy', 'Admin', '/team/nowshed.png', 'Alternate SPM (ASPM), Department of CSE, CU', 'active'),
     ('a0000000-0000-0000-0000-000000000003', 'Miskat Hasan', 'miskat.cse@cu.ac.bd', '$2a$12$1jR4mYp7c9kX8tW2qFzCReE6cWjT1vM0uO3bL7pQ8eN2sA4xZ9uCy', 'Moderator', '/team/miskat.jpg', 'Research Assistant & Full-stack Engineer, BIKE Lab', 'active'),
-    ('a0000000-0000-0000-0000-000000000004', 'Sayed Hossain', 'sayed.fellow@cu.ac.bd', '$2a$12$1jR4mYp7c9kX8tW2qFzCReE6cWjT1vM0uO3bL7pQ8eN2sA4xZ9uCy', 'Member', '/team/sayed.jpg', 'PhD Research Fellow (KG-RAG Domain)', 'active')
+    ('a0000000-0000-0000-0000-000000000004', 'Sayed Hossain', 'sayed.fellow@cu.ac.bd', '$2a$12$1jR4mYp7c9kX8tW2qFzCReE6cWjT1vM0uO3bL7pQ8eN2sA4xZ9uCy', 'Moderator', '/team/sayed.jpg', 'PhD Research Fellow (KG-RAG Domain)', 'active')
 ON CONFLICT (email) DO NOTHING;
 
 -- 2. Insert Initial Team Members (Personnel with custom editable designations)

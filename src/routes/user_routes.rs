@@ -73,7 +73,7 @@ fn validate_name(name: &str) -> Result<(), AppError> {
     Ok(())
 }
 
-/// POST /api/users - Create User (STRICTLY Admin Only: Only Admin can add Admin, Moderator, Member)
+/// POST /api/users - Create User (STRICTLY Admin Only: Only Admin can add Admin, Moderator)
 pub async fn create_user(
     State(pool): State<PgPool>,
     AdminOnly(admin_claims): AdminOnly,
@@ -81,7 +81,7 @@ pub async fn create_user(
 ) -> Result<Json<UserResponse>, AppError> {
     // Validate role
     let role = UserRole::from_str(&payload.role).ok_or_else(|| {
-        AppError::BadRequest("Invalid role. Must be 'Admin', 'Moderator', or 'Member'".to_string())
+        AppError::BadRequest("Invalid role. Must be 'Admin' or 'Moderator'".to_string())
     })?;
 
     let email = payload.email.trim().to_lowercase();
@@ -175,7 +175,7 @@ pub async fn update_user(
     let role = if let Some(r) = payload.role {
         UserRole::from_str(&r)
             .ok_or_else(|| {
-                AppError::BadRequest("Invalid role. Must be 'Admin', 'Moderator', or 'Member'".to_string())
+                AppError::BadRequest("Invalid role. Must be 'Admin' or 'Moderator'".to_string())
             })?
             .as_str()
             .to_string()
@@ -229,7 +229,7 @@ pub async fn update_user(
     Ok(Json(UserResponse::from(updated)))
 }
 
-/// DELETE /api/users/:id - Delete User (STRICTLY Admin Only: Only Admin can remove an Admin, Moderator, Member)
+/// DELETE /api/users/:id - Delete User (STRICTLY Admin Only: Only Admin can remove an Admin, Moderator)
 pub async fn delete_user(
     State(pool): State<PgPool>,
     AdminOnly(admin_claims): AdminOnly,

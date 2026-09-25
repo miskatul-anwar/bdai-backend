@@ -9,9 +9,8 @@ High-performance, async Rust backend for the **BDAI (Bangla Dataset & AI Platfor
 - **Blazing Fast Axum Framework**: Async HTTP services with Tokio, Tower middleware, and CORS.
 - **Supabase PostgreSQL Integration**: Direct connection pooling with SQLx, auto-migrations, and seed data.
 - **Strict Role-Based Access Control (RBAC)**:
-  - **Only Admin can Add or Remove** an Admin, Moderator, Member, and all kinds of employees.
+  - **Only Admin can Add or Remove** an Admin, Moderator, and all kinds of employees.
   - **Moderators** can create and update news, tenders/notices, and research milestones.
-  - **Members** have read-only access.
 - **Google OAuth 2.0 Whitelist Authentication**:
   - Sign in with institutional (`@cu.ac.bd`) or personal Google accounts.
   - **Strict Admin Whitelist Enforced**: Only Google accounts whose emails have previously been added by an Admin are granted access. Any unregistered account is rejected with HTTP `403 Forbidden`.
@@ -102,7 +101,7 @@ The server will start listening on **`http://localhost:8080`**.
 | `/api/auth/google/callback` | `GET` | Public | Handle Google OAuth redirect callback |
 | `/api/auth/me` | `GET` | Authenticated | Get current authenticated user profile |
 | `/api/users` | `GET` | Authenticated | List all user accounts |
-| `/api/users` | `POST` | **Admin Only** | Create an Admin, Moderator, or Member |
+| `/api/users` | `POST` | **Admin Only** | Create an Admin or Moderator |
 | `/api/users/:id` | `PUT` | **Admin Only** | Edit user profile or reassign role |
 | `/api/users/:id` | `DELETE` | **Admin Only** | Remove user account (cannot delete self) |
 | `/api/team` | `GET` | Public | List team members with editable designations |
@@ -131,7 +130,7 @@ The server will start listening on **`http://localhost:8080`**.
 | Prof. Dr. Rudra Pratap Deb Nath | `rudra@cu.ac.bd` | `admin123` | **Admin** |
 | Dr. Abu Nowshed Chy | `nowshed@cu.ac.bd` | `admin123` | **Admin** |
 | Miskat Hasan | `miskat.cse@cu.ac.bd` | `admin123` | **Moderator** |
-| Sayed Hossain | `sayed.fellow@cu.ac.bd` | `admin123` | **Member** |
+| Sayed Hossain | `sayed.fellow@cu.ac.bd` | `admin123` | **Moderator** |
 
 ---
 

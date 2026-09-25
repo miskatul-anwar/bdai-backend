@@ -4,13 +4,13 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- 1. Users Table (Admin, Moderator, Member)
+-- 1. Users Table (Admin, Moderator)
 CREATE TABLE IF NOT EXISTS public.users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('Admin', 'Moderator', 'Member')),
+    role TEXT NOT NULL CHECK (role IN ('Admin', 'Moderator')),
     avatar TEXT DEFAULT '/team/miskat.jpg',
     department TEXT NOT NULL DEFAULT 'Department of CSE, University of Chittagong',
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive')),

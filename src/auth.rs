@@ -11,7 +11,7 @@ pub struct Claims {
     pub sub: String, // User ID (UUID string)
     pub email: String,
     pub name: String,
-    pub role: String, // Admin | Moderator | Member
+    pub role: String, // Admin | Moderator
     pub exp: usize,
     pub iat: usize,
 }
@@ -23,11 +23,6 @@ impl Claims {
 
     pub fn is_moderator(&self) -> bool {
         self.role.eq_ignore_ascii_case("Moderator")
-    }
-
-    #[allow(dead_code)]
-    pub fn is_member(&self) -> bool {
-        self.role.eq_ignore_ascii_case("Member")
     }
 
     pub fn can_edit_content(&self) -> bool {

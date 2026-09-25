@@ -7,7 +7,6 @@ use uuid::Uuid;
 pub enum UserRole {
     Admin,
     Moderator,
-    Member,
 }
 
 impl UserRole {
@@ -15,7 +14,6 @@ impl UserRole {
         match self {
             UserRole::Admin => "Admin",
             UserRole::Moderator => "Moderator",
-            UserRole::Member => "Member",
         }
     }
 
@@ -23,7 +21,6 @@ impl UserRole {
         match s {
             "Admin" => Some(UserRole::Admin),
             "Moderator" => Some(UserRole::Moderator),
-            "Member" => Some(UserRole::Member),
             _ => None,
         }
     }
@@ -76,7 +73,7 @@ pub struct CreateUserRequest {
     pub name: String,
     pub email: String,
     pub password: Option<String>,
-    pub role: String, // Admin | Moderator | Member
+    pub role: String, // Admin | Moderator
     pub avatar: Option<String>,
     pub department: Option<String>,
     pub status: Option<String>,
