@@ -7,6 +7,7 @@ pub mod user;
 pub mod vacancy;
 pub mod partner;
 pub mod tool;
+pub mod video;
 
 pub use activity::*;
 pub use news::*;
@@ -17,3 +18,4 @@ pub use team::*;
 pub use tool::*;
 pub use user::*;
 pub use vacancy::*;
+pub use video::*;

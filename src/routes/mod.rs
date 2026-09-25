@@ -10,6 +10,7 @@ pub mod upload_routes;
 pub mod user_routes;
 pub mod tool_routes;
 pub mod vacancy_routes;
+pub mod video_routes;
 
 use axum::{
     routing::{get, post, put},
@@ -118,5 +119,16 @@ pub fn create_api_router() -> Router<AppState> {
             get(tool_routes::get_tool)
                 .put(tool_routes::update_tool)
                 .delete(tool_routes::delete_tool),
+        )
+        // BDAI Videos Showcase
+        .route(
+            "/api/videos",
+            get(video_routes::list_videos).post(video_routes::create_video),
+        )
+        .route(
+            "/api/videos/{id}",
+            get(video_routes::get_video)
+                .put(video_routes::update_video)
+                .delete(video_routes::delete_video),
         )
 }
