@@ -9,7 +9,7 @@ mod routes;
 mod state;
 
 use std::net::SocketAddr;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer, key_extractor::SmartIpKeyExtractor};
 use tracing::{error, info};
@@ -58,10 +58,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config: config.clone(),
     };
 
-    // 4. Configure Hardened CORS
+    // 4. Configure Hardened CORS with Credentials & Cookie Support
     let cors = if config.cors_origins.is_empty() || config.cors_origins.contains(&"*".to_string()) {
         CorsLayer::new()
-            .allow_origin(Any)
+            .allow_origin(tower_http::cors::AllowOrigin::mirror_request())
             .allow_methods([
                 axum::http::Method::GET,
                 axum::http::Method::POST,
@@ -73,7 +73,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 axum::http::header::AUTHORIZATION,
                 axum::http::header::CONTENT_TYPE,
                 axum::http::header::ACCEPT,
+                axum::http::header::COOKIE,
             ])
+            .expose_headers([
+                axum::http::header::SET_COOKIE,
+            ])
+            .allow_credentials(true)
     } else {
         let allowed_origins: Vec<axum::http::HeaderValue> = config
             .cors_origins
@@ -94,6 +99,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 axum::http::header::AUTHORIZATION,
                 axum::http::header::CONTENT_TYPE,
                 axum::http::header::ACCEPT,
+                axum::http::header::COOKIE,
+            ])
+            .expose_headers([
+                axum::http::header::SET_COOKIE,
             ])
             .allow_credentials(true)
     };

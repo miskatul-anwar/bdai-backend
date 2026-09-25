@@ -87,6 +87,22 @@ pub fn create_token(user: &User, secret: &str, expiration_hours: i64) -> Result<
     create_access_token(user, secret, expiration_hours)
 }
 
+/// Cookie name constants
+pub const ACCESS_TOKEN_COOKIE: &str = "access_token";
+pub const BDAI_ACCESS_TOKEN_COOKIE: &str = "bdai_access_token";
+
+/// Creates a standard Set-Cookie header value with HttpOnly, Secure, SameSite=None, Partitioned
+pub fn create_cookie_header(name: &str, value: &str, max_age_seconds: i64) -> String {
+    format!(
+        "{name}={value}; Path=/; Max-Age={max_age_seconds}; HttpOnly; Secure; SameSite=None; Partitioned"
+    )
+}
+
+/// Creates a Set-Cookie header value to immediately clear/expire a cookie
+pub fn create_clear_cookie_header(name: &str) -> String {
+    format!("{name}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=None; Partitioned")
+}
+
 pub fn verify_token(token: &str, secret: &str) -> Result<Claims, AppError> {
     let mut validation = Validation::new(jsonwebtoken::Algorithm::HS256);
     validation.validate_exp = true;

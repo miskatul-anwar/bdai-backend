@@ -6,10 +6,13 @@ use axum::{
 use sqlx::PgPool;
 use std::collections::HashMap;
 
-use crate::auth::{create_auth_response, verify_password, verify_token};
+use crate::auth::{
+    create_auth_response, create_clear_cookie_header, create_cookie_header, verify_password,
+    verify_token, ACCESS_TOKEN_COOKIE, BDAI_ACCESS_TOKEN_COOKIE,
+};
 use crate::config::AppConfig;
 use crate::error::AppError;
-use crate::middleware::CurrentUser;
+use crate::middleware::{extract_token_from_cookies, CurrentUser};
 use crate::models::{
     AuthResponse, GoogleAuthRequest, GoogleAuthUrlResponse, GoogleTokenInfo, LoginRequest, User,
     UserResponse, VerifyTokenRequest, VerifyTokenResponse,
@@ -19,7 +22,7 @@ pub async fn login(
     State(pool): State<PgPool>,
     State(config): State<AppConfig>,
     Json(payload): Json<LoginRequest>,
-) -> Result<Json<AuthResponse>, AppError> {
+) -> Result<(axum::http::HeaderMap, Json<AuthResponse>), AppError> {
     let identifier = payload
         .username
         .as_deref()
@@ -78,15 +81,26 @@ pub async fn login(
     .execute(&pool)
     .await;
 
-    Ok(Json(auth_resp))
+    // Attach Set-Cookie headers for access token
+    let mut headers = axum::http::HeaderMap::new();
+    let cookie_val = create_cookie_header(ACCESS_TOKEN_COOKIE, &auth_resp.access_token, auth_resp.expires_in);
+    if let Ok(hv) = axum::http::HeaderValue::from_str(&cookie_val) {
+        headers.append(axum::http::header::SET_COOKIE, hv);
+    }
+    let bdai_cookie_val = create_cookie_header(BDAI_ACCESS_TOKEN_COOKIE, &auth_resp.access_token, auth_resp.expires_in);
+    if let Ok(hv) = axum::http::HeaderValue::from_str(&bdai_cookie_val) {
+        headers.append(axum::http::header::SET_COOKIE, hv);
+    }
+
+    Ok((headers, Json(auth_resp)))
 }
 
-/// POST /api/auth/refresh - Refresh JWT Access Token for an active user
+/// POST /api/auth/refresh - Refresh JWT Access Token and update authentication cookies
 pub async fn refresh(
     State(pool): State<PgPool>,
     State(config): State<AppConfig>,
     CurrentUser(claims): CurrentUser,
-) -> Result<Json<AuthResponse>, AppError> {
+) -> Result<(axum::http::HeaderMap, Json<AuthResponse>), AppError> {
     let user_id = claims.user_uuid()?;
 
     let user = sqlx::query_as::<_, User>(
@@ -104,21 +118,62 @@ pub async fn refresh(
     }
 
     let auth_resp = create_auth_response(user, &config.jwt_secret, config.jwt_expiration_hours)?;
-    Ok(Json(auth_resp))
+
+    // Attach refreshed Set-Cookie headers
+    let mut headers = axum::http::HeaderMap::new();
+    let cookie_val = create_cookie_header(ACCESS_TOKEN_COOKIE, &auth_resp.access_token, auth_resp.expires_in);
+    if let Ok(hv) = axum::http::HeaderValue::from_str(&cookie_val) {
+        headers.append(axum::http::header::SET_COOKIE, hv);
+    }
+    let bdai_cookie_val = create_cookie_header(BDAI_ACCESS_TOKEN_COOKIE, &auth_resp.access_token, auth_resp.expires_in);
+    if let Ok(hv) = axum::http::HeaderValue::from_str(&bdai_cookie_val) {
+        headers.append(axum::http::header::SET_COOKIE, hv);
+    }
+
+    Ok((headers, Json(auth_resp)))
 }
 
-/// POST /api/auth/verify - Verify a JWT access token and return token validity + decoded claims
+/// POST /api/auth/logout - Clear authentication cookies
+pub async fn logout() -> Result<(axum::http::HeaderMap, Json<serde_json::Value>), AppError> {
+    let mut headers = axum::http::HeaderMap::new();
+    let clear_val = create_clear_cookie_header(ACCESS_TOKEN_COOKIE);
+    if let Ok(hv) = axum::http::HeaderValue::from_str(&clear_val) {
+        headers.append(axum::http::header::SET_COOKIE, hv);
+    }
+    let clear_bdai_val = create_clear_cookie_header(BDAI_ACCESS_TOKEN_COOKIE);
+    if let Ok(hv) = axum::http::HeaderValue::from_str(&clear_bdai_val) {
+        headers.append(axum::http::header::SET_COOKIE, hv);
+    }
+
+    Ok((
+        headers,
+        Json(serde_json::json!({
+            "message": "Logged out successfully. Authentication cookies cleared."
+        })),
+    ))
+}
+
+/// POST /api/auth/verify - Verify a JWT access token from JSON payload, Authorization header, or Cookie
 pub async fn verify(
     State(config): State<AppConfig>,
     headers: axum::http::HeaderMap,
     Json(payload): Json<VerifyTokenRequest>,
 ) -> Result<Json<VerifyTokenResponse>, AppError> {
-    let token = payload.token.or_else(|| {
-        headers
-            .get(axum::http::header::AUTHORIZATION)
-            .and_then(|val| val.to_str().ok())
-            .and_then(|h| h.strip_prefix("Bearer ").map(|s| s.to_string()))
-    });
+    let token = payload
+        .token
+        .or_else(|| {
+            headers
+                .get(axum::http::header::AUTHORIZATION)
+                .and_then(|val| val.to_str().ok())
+                .and_then(|h| h.strip_prefix("Bearer ").map(|s| s.trim().to_string()))
+        })
+        .or_else(|| {
+            headers
+                .get(axum::http::header::COOKIE)
+                .and_then(|val| val.to_str().ok())
+                .and_then(extract_token_from_cookies)
+                .map(|s| s.to_string())
+        });
 
     let token = match token {
         Some(t) if !t.trim().is_empty() => t.trim().to_string(),
@@ -126,7 +181,7 @@ pub async fn verify(
             return Ok(Json(VerifyTokenResponse {
                 valid: false,
                 claims: None,
-                message: Some("No token provided in request body or Authorization header".to_string()),
+                message: Some("No token provided in request body, Authorization header, or Cookie".to_string()),
             }));
         }
     };

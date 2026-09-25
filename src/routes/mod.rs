@@ -23,6 +23,7 @@ pub fn create_router() -> Router<AppState> {
         // Authentication
         .route("/api/auth/login", post(auth_routes::login))
         .route("/api/auth/refresh", post(auth_routes::refresh))
+        .route("/api/auth/logout", post(auth_routes::logout))
         .route("/api/auth/verify", post(auth_routes::verify))
         .route("/api/auth/me", get(auth_routes::me))
         .route("/api/auth/google", post(auth_routes::google_auth))
