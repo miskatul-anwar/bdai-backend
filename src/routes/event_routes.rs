@@ -14,6 +14,7 @@ use crate::models::{CreateEventRequest, Event, GalleryItem, SiteSetting, UpdateE
 #[derive(Debug, Deserialize)]
 pub struct EventQuery {
     pub status: Option<String>,
+    pub all: Option<bool>,
 }
 
 fn get_seed_events() -> Vec<Event> {
@@ -39,6 +40,7 @@ fn get_seed_events() -> Vec<Event> {
                 GalleryItem { src: "/events/workshop_8.jpeg".to_string(), alt: "Group photo in the BDAI lab".to_string() },
             ],
             order: 1,
+            is_visible: true,
             created_at: Some("2026-07-29T10:00:00Z".to_string()),
             updated_at: Some("2026-07-29T10:00:00Z".to_string()),
         },
@@ -61,6 +63,7 @@ fn get_seed_events() -> Vec<Event> {
                 GalleryItem { src: "/events/seminar2_6.jpeg".to_string(), alt: "RAG-Driven BI seminar gallery image 6".to_string() },
             ],
             order: 2,
+            is_visible: true,
             created_at: Some("2026-05-19T14:00:00Z".to_string()),
             updated_at: Some("2026-05-19T14:00:00Z".to_string()),
         },
@@ -83,6 +86,7 @@ fn get_seed_events() -> Vec<Event> {
                 GalleryItem { src: "/events/phd6.png".to_string(), alt: "Event gallery image 6".to_string() },
             ],
             order: 3,
+            is_visible: true,
             created_at: Some("2026-05-14T14:00:00Z".to_string()),
             updated_at: Some("2026-05-14T14:00:00Z".to_string()),
         },
@@ -173,15 +177,19 @@ pub async fn list_events(
 ) -> Result<Json<Vec<Event>>, AppError> {
     let events = get_events_from_db(&pool).await?;
 
-    let filtered = if let Some(status_filter) = query.status {
-        let filter_lower = status_filter.to_lowercase();
-        events
-            .into_iter()
-            .filter(|e| e.status.to_lowercase() == filter_lower)
-            .collect()
-    } else {
-        events
-    };
+    let include_all = query.all.unwrap_or(false);
+
+    let filtered = events
+        .into_iter()
+        .filter(|e| {
+            let status_matches = match &query.status {
+                Some(status_filter) => e.status.to_lowercase() == status_filter.to_lowercase(),
+                None => true,
+            };
+            let visibility_matches = include_all || e.is_visible;
+            status_matches && visibility_matches
+        })
+        .collect();
 
     Ok(Json(filtered))
 }
@@ -227,6 +235,7 @@ pub async fn create_event(
         banner: payload.banner,
         gallery: payload.gallery,
         order: next_order,
+        is_visible: payload.is_visible.unwrap_or(true),
         created_at: Some(now_str.clone()),
         updated_at: Some(now_str),
     };
@@ -288,6 +297,9 @@ pub async fn update_event(
     }
     if let Some(order) = payload.order {
         current.order = order;
+    }
+    if let Some(visible) = payload.is_visible {
+        current.is_visible = visible;
     }
     current.updated_at = Some(now_str);
 

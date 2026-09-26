@@ -26,10 +26,16 @@ pub struct Event {
     pub gallery: Vec<GalleryItem>,
     #[serde(default)]
     pub order: i32,
+    #[serde(default = "default_visible")]
+    pub is_visible: bool,
     #[serde(default)]
     pub created_at: Option<String>,
     #[serde(default)]
     pub updated_at: Option<String>,
+}
+
+fn default_visible() -> bool {
+    true
 }
 
 fn default_status() -> String {
@@ -61,6 +67,8 @@ pub struct CreateEventRequest {
     pub gallery: Vec<GalleryItem>,
     #[serde(default)]
     pub order: Option<i32>,
+    #[serde(default)]
+    pub is_visible: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -75,4 +83,5 @@ pub struct UpdateEventRequest {
     pub banner: Option<String>,
     pub gallery: Option<Vec<GalleryItem>>,
     pub order: Option<i32>,
+    pub is_visible: Option<bool>,
 }

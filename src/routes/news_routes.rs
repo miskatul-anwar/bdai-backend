@@ -39,6 +39,8 @@ pub async fn list_news(
             builder.push(" AND status = ");
             builder.push_bind(stat);
         }
+    } else {
+        builder.push(" AND status = 'published'");
     }
 
     if let Some(feat) = query.featured {
