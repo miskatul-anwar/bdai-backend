@@ -108,10 +108,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // 5. Configure Rate Limiting (Token Bucket per Client IP via SmartIpKeyExtractor)
+    // Tower Governor's `per_millisecond` sets the interval to replenish ONE token.
+    // E.g., rate_limit_per_second = 50 => replenishes 1 token every 20ms (50 req/sec) with burst up to 200.
+    let period_ms = (1000 / config.rate_limit_per_second.max(1)).max(1);
     let governor_conf = std::sync::Arc::new(
         GovernorConfigBuilder::default()
-            .per_second(config.rate_limit_per_second)
+            .per_millisecond(period_ms)
             .burst_size(config.rate_limit_burst)
+            .methods(vec![
+                axum::http::Method::GET,
+                axum::http::Method::POST,
+                axum::http::Method::PUT,
+                axum::http::Method::DELETE,
+                axum::http::Method::PATCH,
+            ])
             .use_headers()
             .key_extractor(SmartIpKeyExtractor)
             .finish()

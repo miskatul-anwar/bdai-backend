@@ -71,12 +71,12 @@ impl AppConfig {
         let rate_limit_per_second = env::var("RATE_LIMIT_PER_SECOND")
             .ok()
             .and_then(|v| v.parse().ok())
-            .unwrap_or(10);
+            .unwrap_or(50);
 
         let rate_limit_burst = env::var("RATE_LIMIT_BURST")
             .ok()
             .and_then(|v| v.parse().ok())
-            .unwrap_or(50);
+            .unwrap_or(200);
 
         let self_ping_enabled = env::var("SELF_PING_ENABLED")
             .map(|v| v.to_lowercase() != "false" && v != "0")
