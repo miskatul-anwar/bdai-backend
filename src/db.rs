@@ -45,5 +45,12 @@ pub async fn run_migrations_if_needed(pool: &PgPool) -> Result<(), sqlx::Error> 
         info!("Database schema is up to date.");
     }
 
+    // Ensure tasks column exists on research_objectives
+    let _ = sqlx::query(
+        "ALTER TABLE public.research_objectives ADD COLUMN IF NOT EXISTS tasks JSONB NOT NULL DEFAULT '[]'::jsonb;"
+    )
+    .execute(pool)
+    .await;
+
     Ok(())
 }

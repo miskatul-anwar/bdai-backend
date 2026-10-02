@@ -13,7 +13,7 @@ pub async fn list_objectives(
     State(pool): State<PgPool>,
 ) -> Result<Json<Vec<ResearchObjective>>, AppError> {
     let objectives = sqlx::query_as::<_, ResearchObjective>(
-        "SELECT id, title, details, researcher, sector, status, progress, deliverables, created_at, updated_at
+        "SELECT id, title, details, researcher, sector, status, progress, deliverables, tasks, created_at, updated_at
          FROM public.research_objectives
          ORDER BY id ASC",
     )
@@ -31,7 +31,7 @@ pub async fn update_objective(
     Json(payload): Json<UpdateObjectiveRequest>,
 ) -> Result<Json<ResearchObjective>, AppError> {
     let existing = sqlx::query_as::<_, ResearchObjective>(
-        "SELECT id, title, details, researcher, sector, status, progress, deliverables, created_at, updated_at
+        "SELECT id, title, details, researcher, sector, status, progress, deliverables, tasks, created_at, updated_at
          FROM public.research_objectives
          WHERE id = $1",
     )
@@ -47,12 +47,13 @@ pub async fn update_objective(
     let status = payload.status.unwrap_or(existing.status);
     let progress = payload.progress.unwrap_or(existing.progress);
     let deliverables = payload.deliverables.unwrap_or(existing.deliverables);
+    let tasks = payload.tasks.or(existing.tasks).unwrap_or_else(|| serde_json::json!([]));
 
     let updated = sqlx::query_as::<_, ResearchObjective>(
         "UPDATE public.research_objectives
-         SET title = $1, details = $2, researcher = $3, sector = $4, status = $5, progress = $6, deliverables = $7, updated_at = now()
-         WHERE id = $8
-         RETURNING id, title, details, researcher, sector, status, progress, deliverables, created_at, updated_at",
+         SET title = $1, details = $2, researcher = $3, sector = $4, status = $5, progress = $6, deliverables = $7, tasks = $8, updated_at = now()
+         WHERE id = $9
+         RETURNING id, title, details, researcher, sector, status, progress, deliverables, tasks, created_at, updated_at",
     )
     .bind(&title)
     .bind(&details)
@@ -61,6 +62,7 @@ pub async fn update_objective(
     .bind(&status)
     .bind(progress)
     .bind(deliverables)
+    .bind(tasks)
     .bind(&id)
     .fetch_one(&pool)
     .await?;
@@ -88,11 +90,12 @@ pub async fn create_objective(
     let status = payload.status.unwrap_or_else(|| "in-progress".to_string());
     let progress = payload.progress.unwrap_or(0);
     let deliverables = payload.deliverables.unwrap_or(1);
+    let tasks = payload.tasks.unwrap_or_else(|| serde_json::json!([]));
 
     let created = sqlx::query_as::<_, ResearchObjective>(
-        "INSERT INTO public.research_objectives (id, title, details, researcher, sector, status, progress, deliverables)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         RETURNING id, title, details, researcher, sector, status, progress, deliverables, created_at, updated_at",
+        "INSERT INTO public.research_objectives (id, title, details, researcher, sector, status, progress, deliverables, tasks)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING id, title, details, researcher, sector, status, progress, deliverables, tasks, created_at, updated_at",
     )
     .bind(&payload.id)
     .bind(&payload.title)
@@ -102,6 +105,7 @@ pub async fn create_objective(
     .bind(&status)
     .bind(progress)
     .bind(deliverables)
+    .bind(tasks)
     .fetch_one(&pool)
     .await?;
 

@@ -12,6 +12,8 @@ pub struct ResearchObjective {
     pub status: String, // in-progress | completed | planned
     pub progress: i32,  // 0 - 100
     pub deliverables: i32,
+    #[sqlx(default)]
+    pub tasks: Option<serde_json::Value>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -26,6 +28,7 @@ pub struct CreateObjectiveRequest {
     pub status: Option<String>,
     pub progress: Option<i32>,
     pub deliverables: Option<i32>,
+    pub tasks: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -37,4 +40,5 @@ pub struct UpdateObjectiveRequest {
     pub status: Option<String>,
     pub progress: Option<i32>,
     pub deliverables: Option<i32>,
+    pub tasks: Option<serde_json::Value>,
 }
